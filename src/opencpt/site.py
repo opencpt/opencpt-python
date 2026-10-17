@@ -6,6 +6,8 @@ cone readings in kPa, unit weight in kN/m³.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import numpy as np
 
 PA = 101.325
@@ -82,3 +84,56 @@ def soil_behaviour_type_index(qt, fs, sigma_v, sigma_v_eff, max_iter: int = 30):
             break
         n = n_new
     return ic
+
+
+@dataclass
+class SiteProfile:
+    """Site characterization of a sounding; one value per reading."""
+
+    depth: np.ndarray
+    qt: np.ndarray
+    """Corrected cone resistance (kPa); NaN for invalid readings."""
+    fs: np.ndarray
+    """Sleeve friction (kPa); NaN for invalid readings."""
+    unit_weight: np.ndarray
+    sigma_v: np.ndarray
+    sigma_v_eff: np.ndarray
+    """Effective vertical stress (kPa), at least 1 kPa."""
+    ic: np.ndarray
+    invalid: np.ndarray
+    """True for readings that can't be interpreted: qt or fs missing, qt ≤ 0 or fs < 0."""
+
+
+def site_profile(depth, qt, fs, gwt: float, unit_weight=None) -> SiteProfile:
+    """Unit weight, stresses and Ic for a sounding.
+
+    Readings that can't be interpreted are flagged. Their unit weight is interpolated from the
+    neighbouring readings, so the stresses of every reading below them stay defined.
+
+    Args:
+        depth: Depth below ground surface (m), increasing.
+        qt: Corrected cone resistance (kPa).
+        fs: Sleeve friction (kPa).
+        gwt: Groundwater depth (m).
+        unit_weight: One constant unit weight (kN/m³), or None for Robertson & Cabal (2010).
+    """
+    if unit_weight is not None and np.ndim(unit_weight) != 0:
+        raise TypeError("unit_weight must be one value in kN/m³, or None for Robertson & Cabal (2010).")
+    z = np.asarray(depth, dtype=float)
+    qt = np.asarray(qt, dtype=float)
+    fs = np.asarray(fs, dtype=float)
+    invalid = ~np.isfinite(qt) | ~np.isfinite(fs) | (qt <= 0) | (fs < 0)
+    if invalid.size and invalid.all():
+        raise ValueError("No reading has both qt > 0 and fs ≥ 0.")
+    qt = np.where(invalid, np.nan, qt)
+    fs = np.where(invalid, np.nan, fs)
+    if unit_weight is None:
+        gamma = unit_weight_robertson_cabal_2010(qt, fs)
+        if invalid.any():
+            gamma = np.interp(z, z[~invalid], gamma[~invalid])
+    else:
+        gamma = np.full_like(qt, unit_weight)
+    sigma_v, _, sigma_v_eff = vertical_stresses(z, gamma, gwt)
+    sigma_v_eff = np.maximum(sigma_v_eff, 1.0)
+    ic = soil_behaviour_type_index(qt, fs, sigma_v, sigma_v_eff)
+    return SiteProfile(z, qt, fs, gamma, sigma_v, sigma_v_eff, ic, invalid)

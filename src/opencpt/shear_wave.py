@@ -51,3 +51,26 @@ def vs_assaf2023_mg15_qc(qc, fs, depth):
     fs = np.asarray(fs, dtype=float)
     fs = np.where(fs >= 0, np.maximum(fs, FS_MIN), np.nan)
     return np.exp(3.81 + 0.0884 * np.log(_positive(qc)) + 0.0132 * np.log(fs) + 0.226 * np.log(_positive(depth)))
+
+
+def time_averaged_vs(depth, vs, z_max: float = 30.0):
+    """Time-averaged Vs (m/s) from the ground surface to `z_max`, or to the deepest reading if shallower.
+
+    Vs_z = z / Σ(h / Vs). As for the stresses, each reading's Vs applies to the interval above it,
+    starting from the ground surface; readings without Vs are skipped, so the next reading spans
+    the gap. With z_max = 30 m and a sounding at least 30 m deep this is Vs30.
+
+    Returns:
+        (vs_avg, z) where z is the depth actually covered (m); (NaN, 0) without any Vs.
+    """
+    depth = np.asarray(depth, dtype=float)
+    vs = np.asarray(vs, dtype=float)
+    ok = np.isfinite(depth) & np.isfinite(vs) & (vs > 0) & (depth > 0)
+    z, v = depth[ok], vs[ok]
+    if not z.size:
+        return float("nan"), 0.0
+    # The reading at or just below z_max covers the interval down to z_max.
+    last = min(np.searchsorted(z, z_max), z.size - 1)
+    z, v = np.minimum(z[: last + 1], z_max), v[: last + 1]
+    h = np.diff(np.r_[0.0, z])
+    return float(z[-1] / np.sum(h / v)), float(z[-1])

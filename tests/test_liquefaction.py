@@ -150,3 +150,17 @@ class TestInvalidReadings:
         r = self.run(qt=qt)
         mean, _ = r.critical_qc1ncs
         assert np.isfinite(mean)
+
+
+def test_site_profile_matches_the_triggering_result_above_max_depth():
+    z = np.arange(0.5, 30.01, 0.5)
+    qt = np.where(z < 8, 900.0, 6000.0)
+    fs = np.where(z < 8, 35.0, 30.0)
+    qt[10] = -1.0
+    full = site.site_profile(z, qt, fs, gwt=2.0)
+    res = liq.triggering_bi2014(z, qt, fs, gwt=2.0, mw=7.5, amax=0.3, max_depth=20.0)
+    n = res.depth.size
+    assert full.depth.size == z.size and n < z.size
+    assert np.allclose(full.ic[:n], res.ic, equal_nan=True)
+    assert np.allclose(full.sigma_v_eff[:n], res.sigma_v_eff)
+    assert (full.invalid[:n] == res.invalid).all()

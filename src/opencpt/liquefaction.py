@@ -15,9 +15,7 @@ import numpy as np
 from .site import (
     PA,
     corrected_cone_resistance,
-    soil_behaviour_type_index,
-    unit_weight_robertson_cabal_2010,
-    vertical_stresses,
+    site_profile,
 )
 
 C0_DETERMINISTIC = 2.80
@@ -202,30 +200,11 @@ def triggering_bi2014(
     """
     if max_depth > RD_MAX_DEPTH:
         raise ValueError(f"max_depth can be at most {RD_MAX_DEPTH:g} m, the depth to which rd is defined.")
-    if unit_weight is not None and np.ndim(unit_weight) != 0:
-        raise TypeError("unit_weight must be one value in kN/m³, or None for Robertson & Cabal (2010).")
     depth = np.asarray(depth, dtype=float)
     keep = depth <= max_depth
-    z = depth[keep]
-    qt = np.asarray(qt, dtype=float)[keep]
-    fs = np.asarray(fs, dtype=float)[keep]
-
-    # Readings that can't be interpreted are flagged and given no FSL. Their unit weight is interpolated
-    # from the neighbouring readings, so the stresses of every reading below them stay defined.
-    invalid = ~np.isfinite(qt) | ~np.isfinite(fs) | (qt <= 0) | (fs < 0)
-    if invalid.size and invalid.all():
-        raise ValueError("No reading has both qt > 0 and fs ≥ 0.")
-    qt = np.where(invalid, np.nan, qt)
-    fs = np.where(invalid, np.nan, fs)
-    if unit_weight is None:
-        gamma = unit_weight_robertson_cabal_2010(qt, fs)
-        if invalid.any():
-            gamma = np.interp(z, z[~invalid], gamma[~invalid])
-    else:
-        gamma = np.full_like(qt, unit_weight)
-    sigma_v, _, sigma_v_eff = vertical_stresses(z, gamma, gwt)
-    sigma_v_eff = np.maximum(sigma_v_eff, 1.0)
-    ic = soil_behaviour_type_index(qt, fs, sigma_v, sigma_v_eff)
+    site = site_profile(depth[keep], np.asarray(qt, dtype=float)[keep], np.asarray(fs, dtype=float)[keep], gwt, unit_weight)
+    z, qt, gamma, invalid = site.depth, site.qt, site.unit_weight, site.invalid
+    sigma_v, sigma_v_eff, ic = site.sigma_v, site.sigma_v_eff, site.ic
     fc = fines_content_bi2014(ic, cfc)
     q1, _ = qc1ncs_bi2014(qt, sigma_v_eff, fc)
 
