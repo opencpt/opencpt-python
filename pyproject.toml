@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "opencpt"
-version = "0.0.1"
+version = "0.1.0.dev0"
 description = "Open-source Python library for CPT (cone penetration test) data analysis and visualization"
 readme = "README.md"
 license = { text = "MIT" }
@@ -19,7 +19,10 @@ classifiers = [
   "Programming Language :: Python :: 3 :: Only",
   "Topic :: Scientific/Engineering",
 ]
-dependencies = []
+dependencies = ["numpy>=1.23"]
+
+[dependency-groups]
+dev = ["pytest>=8", "pandas>=2", "openpyxl>=3"]
 
 [project.urls]
 Homepage = "https://github.com/opencpt/opencpt-python"
