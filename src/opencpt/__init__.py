@@ -1,6 +1,6 @@
 """opencpt: open-source CPT (cone penetration test) data analysis and visualization."""
 
-from . import liquefaction, site
+from . import liquefaction, shear_wave, site
 from .liquefaction import TriggeringResult, triggering_bi2014
 from .site import corrected_cone_resistance
 
@@ -11,6 +11,7 @@ __all__ = [
     "__version__",
     "corrected_cone_resistance",
     "liquefaction",
+    "shear_wave",
     "site",
     "triggering_bi2014",
 ]
