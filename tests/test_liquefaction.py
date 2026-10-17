@@ -105,3 +105,48 @@ class TestCriticalLayers:
 
     def test_treats_unassessed_readings_as_not_liquefiable(self):
         assert liq.critical_layers(self.z, np.full_like(self.z, np.nan)) == []
+
+
+class TestInvalidReadings:
+    z = np.round(np.arange(0.5, 6.01, 0.5), 2)
+
+    def run(self, qt=None, fs=None, **kw):
+        qt = np.full(self.z.size, 5000.0) if qt is None else qt
+        fs = np.full(self.z.size, 30.0) if fs is None else fs
+        return liq.triggering_bi2014(self.z, qt, fs, gwt=1.0, mw=7.5, amax=0.3, **kw)
+
+    def test_a_missing_reading_does_not_spoil_the_readings_below(self):
+        fs = np.full(self.z.size, 30.0)
+        fs[3] = np.nan
+        r, clean = self.run(fs=fs), self.run()
+        assert np.isfinite(r.sigma_v).all()
+        assert r.invalid.tolist() == [i == 3 for i in range(self.z.size)]
+        assert np.isnan(r.fsl[3])
+        # Readings below the gap match the complete profile (uniform soil, so interpolation is exact).
+        assert r.fsl[4:] == pytest.approx(clean.fsl[4:])
+
+    @pytest.mark.parametrize("qt_bad, fs_bad", [(-300.0, 30.0), (0.0, 30.0), (5000.0, -2.0)])
+    def test_non_physical_readings_are_flagged_not_silently_blank(self, qt_bad, fs_bad):
+        qt = np.full(self.z.size, 5000.0)
+        fs = np.full(self.z.size, 30.0)
+        qt[5], fs[5] = qt_bad, fs_bad
+        r = self.run(qt=qt, fs=fs)
+        assert r.invalid[5] and r.invalid.sum() == 1
+        assert np.isnan(r.fsl[5])
+        assert np.isfinite(r.fsl[6:]).all()
+
+    def test_every_reading_invalid_is_an_error(self):
+        with pytest.raises(ValueError, match="No reading"):
+            self.run(qt=np.full(self.z.size, -1.0))
+
+    def test_unit_weight_must_be_one_value(self):
+        with pytest.raises(TypeError, match="one value"):
+            self.run(unit_weight=np.full(self.z.size, 18.0))
+        assert np.isfinite(self.run(unit_weight=18.0).fsl[2:]).all()
+
+    def test_critical_qc1ncs_ignores_invalid_readings(self):
+        qt = np.full(self.z.size, 3000.0)
+        qt[6] = -1.0
+        r = self.run(qt=qt)
+        mean, _ = r.critical_qc1ncs
+        assert np.isfinite(mean)

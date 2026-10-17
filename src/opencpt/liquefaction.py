@@ -55,7 +55,7 @@ def qc1ncs_bi2014(qt, sigma_v_eff, fc, max_iter: int = 50):
         qc1n = cn * qt / PA
         dq = (11.9 + qc1n / 14.6) * np.exp(1.63 - 9.7 / (fc + 2) - (15.7 / (fc + 2)) ** 2)
         new = qc1n + dq
-        if np.allclose(new, qc1ncs, atol=1e-3):
+        if np.allclose(new, qc1ncs, atol=1e-3, equal_nan=True):
             qc1ncs = new
             break
         qc1ncs = new
@@ -148,7 +148,10 @@ class TriggeringResult:
     csr: np.ndarray
     crr: np.ndarray
     fsl: np.ndarray
-    """Factor of safety; NaN where liquefaction is not assessed (above the water table or Ic ≥ cutoff)."""
+    """Factor of safety; NaN where liquefaction is not assessed (above the water table, Ic ≥ cutoff,
+    or an invalid reading)."""
+    invalid: np.ndarray
+    """True for readings that can't be interpreted: qt or fs missing, qt ≤ 0 or fs < 0."""
     critical_layers: list[tuple[float, float]]
 
     @property
@@ -162,7 +165,7 @@ class TriggeringResult:
         inside = np.zeros_like(self.depth, dtype=bool)
         for top, bottom in self.critical_layers:
             inside |= (self.depth >= top) & (self.depth <= bottom)
-        q = self.qc1ncs[inside]
+        q = self.qc1ncs[inside & np.isfinite(self.qc1ncs)]
         return (float(q.mean()), float(q.std())) if q.size else (float("nan"), float("nan"))
 
 
@@ -190,7 +193,7 @@ def triggering_bi2014(
         gwt: Groundwater depth (m).
         mw: Earthquake moment magnitude.
         amax: Peak ground acceleration (g).
-        unit_weight: Constant unit weight (kN/m³), or None for Robertson & Cabal (2010).
+        unit_weight: One constant unit weight (kN/m³), or None for Robertson & Cabal (2010).
         cfc: Fitting parameter C_FC of the fines content correlation.
         ic_cutoff: Readings with Ic at or above this are treated as not liquefiable.
         max_depth: Readings deeper than this are left out (m); at most 34 m, the limit of rd.
@@ -199,13 +202,27 @@ def triggering_bi2014(
     """
     if max_depth > RD_MAX_DEPTH:
         raise ValueError(f"max_depth can be at most {RD_MAX_DEPTH:g} m, the depth to which rd is defined.")
+    if unit_weight is not None and np.ndim(unit_weight) != 0:
+        raise TypeError("unit_weight must be one value in kN/m³, or None for Robertson & Cabal (2010).")
     depth = np.asarray(depth, dtype=float)
     keep = depth <= max_depth
     z = depth[keep]
     qt = np.asarray(qt, dtype=float)[keep]
     fs = np.asarray(fs, dtype=float)[keep]
 
-    gamma = unit_weight_robertson_cabal_2010(qt, fs) if unit_weight is None else np.full_like(qt, unit_weight)
+    # Readings that can't be interpreted are flagged and given no FSL. Their unit weight is interpolated
+    # from the neighbouring readings, so the stresses of every reading below them stay defined.
+    invalid = ~np.isfinite(qt) | ~np.isfinite(fs) | (qt <= 0) | (fs < 0)
+    if invalid.size and invalid.all():
+        raise ValueError("No reading has both qt > 0 and fs ≥ 0.")
+    qt = np.where(invalid, np.nan, qt)
+    fs = np.where(invalid, np.nan, fs)
+    if unit_weight is None:
+        gamma = unit_weight_robertson_cabal_2010(qt, fs)
+        if invalid.any():
+            gamma = np.interp(z, z[~invalid], gamma[~invalid])
+    else:
+        gamma = np.full_like(qt, unit_weight)
     sigma_v, _, sigma_v_eff = vertical_stresses(z, gamma, gwt)
     sigma_v_eff = np.maximum(sigma_v_eff, 1.0)
     ic = soil_behaviour_type_index(qt, fs, sigma_v, sigma_v_eff)
@@ -215,11 +232,11 @@ def triggering_bi2014(
     csr = cyclic_stress_ratio(amax, sigma_v, sigma_v_eff, stress_reduction_coefficient(z, mw))
     crr = crr_m75_bi2014(q1, c0) * magnitude_scaling_factor_bi2014(mw, q1) * overburden_correction_bi2014(sigma_v_eff, q1)
     fsl = crr / csr
-    fsl[(ic >= ic_cutoff) | (z <= gwt)] = np.nan
+    fsl[(ic >= ic_cutoff) | (z <= gwt) | invalid] = np.nan
 
     return TriggeringResult(
         depth=z, qt=qt, unit_weight=gamma, sigma_v=sigma_v, sigma_v_eff=sigma_v_eff, ic=ic, fc=fc,
-        qc1ncs=q1, csr=csr, crr=crr, fsl=fsl, critical_layers=critical_layers(z, fsl, min_thickness),
+        qc1ncs=q1, csr=csr, crr=crr, fsl=fsl, invalid=invalid, critical_layers=critical_layers(z, fsl, min_thickness),
     )
 
 

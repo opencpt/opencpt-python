@@ -77,7 +77,8 @@ def soil_behaviour_type_index(qt, fs, sigma_v, sigma_v_eff, max_iter: int = 30):
         qtn = np.clip((qt - sigma_v) / PA * (PA / sigma_v_eff) ** n, 1.0, None)
         ic = np.sqrt((3.47 - np.log10(qtn)) ** 2 + (np.log10(fr) + 1.22) ** 2)
         n_new = np.minimum(0.381 * ic + 0.05 * (sigma_v_eff / PA) - 0.15, 1.0)
-        if np.allclose(n, n_new, atol=1e-4):
+        # equal_nan: a missing reading must not keep the loop from ending early.
+        if np.allclose(n, n_new, atol=1e-4, equal_nan=True):
             break
         n = n_new
     return ic
