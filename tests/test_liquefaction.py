@@ -52,6 +52,13 @@ class TestBoulangerIdriss2014:
     def test_msf_is_one_at_mw_7_5(self):
         assert liq.magnitude_scaling_factor_bi2014(7.5, [60, 100, 180]) == pytest.approx([1, 1, 1], abs=1e-3)
 
+    def test_msf_max_is_capped_at_2_2_not_qc1ncs_at_180(self):
+        # B&I (2014): MSFmax = 1.09 + (qc1Ncs/180)^3 <= 2.2, reached near qc1Ncs = 187.
+        mw6 = liq.magnitude_scaling_factor_bi2014(6.0, [180, 200, 254])
+        factor = 8.64 * math.exp(-6.0 / 4) - 1.325
+        assert mw6 == pytest.approx([1 + 1.09 * factor, 1 + 1.2 * factor, 1 + 1.2 * factor])
+        assert mw6[1] == pytest.approx(1.723, abs=1e-3)
+
     def test_msf_is_above_one_for_smaller_earthquakes(self):
         assert liq.magnitude_scaling_factor_bi2014(6.0, [100])[0] > 1
 
@@ -60,6 +67,15 @@ class TestBoulangerIdriss2014:
 
     def test_k_sigma_is_capped_at_1_1(self):
         assert liq.overburden_correction_bi2014([1.0], [200])[0] == pytest.approx(1.1)
+
+    def test_rd_refuses_depths_beyond_34_m(self):
+        assert liq.stress_reduction_coefficient([34.0], 7.5)[0] == pytest.approx(0.619, abs=1e-3)
+        with pytest.raises(ValueError, match="34 m"):
+            liq.stress_reduction_coefficient([20.0, 34.5], 7.5)
+
+    def test_triggering_refuses_max_depth_beyond_34_m(self):
+        with pytest.raises(ValueError, match="34 m"):
+            liq.triggering_bi2014([1.0, 2.0], [5000.0, 5000.0], [50.0, 50.0], gwt=0.5, mw=7.5, amax=0.3, max_depth=40)
 
     def test_rd_is_about_one_at_the_surface(self):
         assert liq.stress_reduction_coefficient([0.0], 7.5)[0] == pytest.approx(1.0, abs=0.01)

@@ -23,6 +23,12 @@ from .site import (
 C0_DETERMINISTIC = 2.80
 """CRR curve constant for the deterministic B&I (2014) relationship (PL ≈ 16%)."""
 
+RD_MAX_DEPTH = 34.0
+"""Depth (m) to which the rd equations apply (Idriss & Boulanger 2008, after Eq. 24)."""
+
+RD_RECOMMENDED_DEPTH = 20.0
+"""Below about this depth (m), Idriss & Boulanger (2008) recommend CSR from site response analysis."""
+
 
 def fines_content_bi2014(ic, cfc: float = 0.0):
     """Fines content (%) from Ic: FC = 80 (Ic + C_FC) - 137, limited to 0-100."""
@@ -57,8 +63,14 @@ def qc1ncs_bi2014(qt, sigma_v_eff, fc, max_iter: int = 50):
 
 
 def stress_reduction_coefficient(depth, mw: float):
-    """Shear stress reduction coefficient rd (Idriss 1999), as used by B&I (2014)."""
+    """Shear stress reduction coefficient rd (Idriss 1999), as used by B&I (2014).
+
+    The equations apply to depths of at most 34 m; deeper they rise again and are not valid,
+    so deeper depths raise ValueError (Idriss & Boulanger 2008).
+    """
     z = np.asarray(depth, dtype=float)
+    if np.any(z > RD_MAX_DEPTH):
+        raise ValueError(f"rd is defined only to {RD_MAX_DEPTH:g} m depth; got {float(np.nanmax(z)):g} m.")
     alpha = -1.012 - 1.126 * np.sin(z / 11.73 + 5.133)
     beta = 0.106 + 0.118 * np.sin(z / 11.28 + 5.142)
     return np.exp(alpha + beta * mw)
@@ -70,9 +82,12 @@ def cyclic_stress_ratio(amax: float, sigma_v, sigma_v_eff, rd):
 
 
 def magnitude_scaling_factor_bi2014(mw: float, qc1ncs):
-    """MSF = 1 + (MSFmax - 1)(8.64 e^(-M/4) - 1.325), MSFmax = 1.09 + (qc1Ncs/180)³ ≤ 2.2."""
-    qs = np.minimum(np.asarray(qc1ncs, dtype=float), 180)
-    msf_max = np.minimum(1.09 + (qs / 180) ** 3, 2.2)
+    """MSF = 1 + (MSFmax - 1)(8.64 e^(-M/4) - 1.325), MSFmax = 1.09 + (qc1Ncs/180)³ ≤ 2.2.
+
+    The only limit is MSFmax ≤ 2.2 (reached near qc1Ncs = 187); qc1Ncs itself is not capped.
+    """
+    q = np.asarray(qc1ncs, dtype=float)
+    msf_max = np.minimum(1.09 + (q / 180) ** 3, 2.2)
     return 1 + (msf_max - 1) * (8.64 * np.exp(-mw / 4) - 1.325)
 
 
@@ -178,10 +193,12 @@ def triggering_bi2014(
         unit_weight: Constant unit weight (kN/m³), or None for Robertson & Cabal (2010).
         cfc: Fitting parameter C_FC of the fines content correlation.
         ic_cutoff: Readings with Ic at or above this are treated as not liquefiable.
-        max_depth: Readings deeper than this are left out (m).
+        max_depth: Readings deeper than this are left out (m); at most 34 m, the limit of rd.
         min_thickness: Minimum critical layer thickness (m).
         c0: CRR curve constant; 2.80 for the deterministic relationship.
     """
+    if max_depth > RD_MAX_DEPTH:
+        raise ValueError(f"max_depth can be at most {RD_MAX_DEPTH:g} m, the depth to which rd is defined.")
     depth = np.asarray(depth, dtype=float)
     keep = depth <= max_depth
     z = depth[keep]
@@ -208,6 +225,8 @@ def triggering_bi2014(
 
 __all__ = [
     "C0_DETERMINISTIC",
+    "RD_MAX_DEPTH",
+    "RD_RECOMMENDED_DEPTH",
     "TriggeringResult",
     "corrected_cone_resistance",
     "critical_layers",
