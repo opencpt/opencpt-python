@@ -18,9 +18,9 @@ GAMMA_W = 9.81
 
 
 def corrected_cone_resistance(qc, u2, area_ratio: float = 0.8):
-    """Corrected cone resistance qt = qc + u2 (1 - a) (kPa).
+    """Corrected cone resistance qt = qc + u2 (1 - a) (kPa), Boulanger & Idriss (2014) Eq. 2.3.
 
-    Negative u2 readings are treated as zero so they cannot reduce qt.
+    u2 is used as measured: a negative reading, as in dilative sand, reduces qt.
 
     Args:
         qc: Measured cone resistance (kPa).
@@ -29,7 +29,7 @@ def corrected_cone_resistance(qc, u2, area_ratio: float = 0.8):
     """
     qc = np.asarray(qc, dtype=float)
     u2 = np.asarray(u2, dtype=float)
-    return qc + np.clip(u2, 0, None) * (1 - area_ratio)
+    return qc + u2 * (1 - area_ratio)
 
 
 def unit_weight_robertson_cabal_2010(qt, fs):

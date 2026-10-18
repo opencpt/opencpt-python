@@ -8,9 +8,10 @@ from opencpt import site
 
 
 class TestSite:
-    def test_corrected_cone_resistance_ignores_negative_u2(self):
+    def test_corrected_cone_resistance_uses_u2_as_measured(self):
+        # B&I (2014) Eq. 2.3: a negative u2 (dilative sand) reduces qt.
         qt = site.corrected_cone_resistance([1000, 1000], [150, -20], area_ratio=0.8)
-        assert qt == pytest.approx([1030, 1000])
+        assert qt == pytest.approx([1030, 996])
 
     def test_vertical_stresses_by_hand(self):
         sv, u0, svp = site.vertical_stresses([1, 2, 3], 18.0, gwt=1.0)

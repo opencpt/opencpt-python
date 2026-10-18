@@ -4,15 +4,15 @@ build-backend = "hatchling.build"
 
 [project]
 name = "opencpt"
-version = "0.1.0.dev0"
-description = "Open-source Python library for CPT (cone penetration test) data analysis and visualization"
+dynamic = ["version"]
+description = "Open-source Python library for CPT (cone penetration test) analysis: liquefaction triggering and shear wave velocity"
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.9"
 authors = [{ name = "jadinata", email = "jamesadinata@gmail.com" }]
 keywords = ["cpt", "cone-penetration-test", "geotechnical", "soil"]
 classifiers = [
-  "Development Status :: 1 - Planning",
+  "Development Status :: 3 - Alpha",
   "Intended Audience :: Science/Research",
   "License :: OSI Approved :: MIT License",
   "Programming Language :: Python :: 3",
@@ -28,8 +28,11 @@ dev = ["pytest>=8", "pandas>=2", "openpyxl>=3"]
 Homepage = "https://github.com/opencpt/opencpt-python"
 Repository = "https://github.com/opencpt/opencpt-python"
 
+[tool.hatch.version]
+path = "src/opencpt/__init__.py"
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/opencpt"]
 
 [tool.hatch.build.targets.sdist]
-include = ["src/opencpt", "README.md", "LICENSE"]
+include = ["src/opencpt", "README.md", "LICENSE", "CHANGELOG.md"]
