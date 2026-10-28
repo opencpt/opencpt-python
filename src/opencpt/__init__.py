@@ -4,7 +4,7 @@ from . import liquefaction, shear_wave, site
 from .liquefaction import TriggeringResult, triggering_bi2014
 from .site import corrected_cone_resistance
 
-__version__ = "0.1.0a1"
+__version__ = "0.1.0a2"
 
 __all__ = [
     "TriggeringResult",
