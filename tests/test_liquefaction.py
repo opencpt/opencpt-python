@@ -32,7 +32,9 @@ class TestSite:
     )
     def test_ic_falls_in_the_expected_soil_zone(self, qt, fs, low, high):
         sv, svp = 100.0, 60.0
-        ic = site.soil_behaviour_type_index(np.array([qt]), np.array([fs]), np.array([sv]), np.array([svp]))
+        ic = site.soil_behaviour_type_index(
+            np.array([qt]), np.array([fs]), np.array([sv]), np.array([svp])
+        )
         assert low < ic[0] < high
 
 
@@ -51,7 +53,9 @@ class TestBoulangerIdriss2014:
         assert liq.crr_m75_bi2014([300])[0] == liq.crr_m75_bi2014([211])[0]
 
     def test_msf_is_one_at_mw_7_5(self):
-        assert liq.magnitude_scaling_factor_bi2014(7.5, [60, 100, 180]) == pytest.approx([1, 1, 1], abs=1e-3)
+        assert liq.magnitude_scaling_factor_bi2014(7.5, [60, 100, 180]) == pytest.approx(
+            [1, 1, 1], abs=1e-3
+        )
 
     def test_msf_max_is_capped_at_2_2_not_qc1ncs_at_180(self):
         # B&I (2014): MSFmax = 1.09 + (qc1Ncs/180)^3 <= 2.2, reached near qc1Ncs = 187.
@@ -76,7 +80,9 @@ class TestBoulangerIdriss2014:
 
     def test_triggering_refuses_max_depth_beyond_34_m(self):
         with pytest.raises(ValueError, match="34 m"):
-            liq.triggering_bi2014([1.0, 2.0], [5000.0, 5000.0], [50.0, 50.0], gwt=0.5, mw=7.5, amax=0.3, max_depth=40)
+            liq.triggering_bi2014(
+                [1.0, 2.0], [5000.0, 5000.0], [50.0, 50.0], gwt=0.5, mw=7.5, amax=0.3, max_depth=40
+            )
 
     def test_rd_is_about_one_at_the_surface(self):
         assert liq.stress_reduction_coefficient([0.0], 7.5)[0] == pytest.approx(1.0, abs=0.01)
@@ -123,7 +129,8 @@ class TestInvalidReadings:
         assert np.isfinite(r.sigma_v).all()
         assert r.invalid.tolist() == [i == 3 for i in range(self.z.size)]
         assert np.isnan(r.fsl[3])
-        # Readings below the gap match the complete profile (uniform soil, so interpolation is exact).
+        # Readings below the gap match the complete profile (uniform soil, so interpolation
+        # is exact).
         assert r.fsl[4:] == pytest.approx(clean.fsl[4:])
 
     @pytest.mark.parametrize("qt_bad, fs_bad", [(-300.0, 30.0), (0.0, 30.0), (5000.0, -2.0)])
@@ -281,7 +288,9 @@ class TestPorePressureAndUnitWeightLimits:
         assert profile.bq == pytest.approx([(80.0 - 29.43) / qnet])
         assert profile.u == pytest.approx([(80.0 - 29.43) / 60.57])
         assert profile.qe == pytest.approx([7920.0])
-        direct = site.normalized_parameters(qt, fs, profile.sigma_v, profile.sigma_v_eff, u0=profile.u0, u2=u2)
+        direct = site.normalized_parameters(
+            qt, fs, profile.sigma_v, profile.sigma_v_eff, u0=profile.u0, u2=u2
+        )
         assert profile.ic == pytest.approx(direct.ic)
         assert profile.qtn == pytest.approx(direct.qtn)
         assert profile.n == pytest.approx(direct.n)
@@ -321,7 +330,11 @@ class TestPorePressureAndUnitWeightLimits:
         assert np.isnan(profile.ic[1]) and np.isnan(profile.qtn[1]) and np.isnan(profile.fr[1])
         assert np.isnan(profile.bq[1]) and np.isnan(profile.qe[1])
         assert np.isfinite(profile.u0).all()
-        assert np.isfinite(profile.qtn[0]) and np.isfinite(profile.bq[0]) and np.isfinite(profile.qe[0])
+        assert (
+            np.isfinite(profile.qtn[0])
+            and np.isfinite(profile.bq[0])
+            and np.isfinite(profile.qe[0])
+        )
 
     def test_unit_weight_limits_default_to_14_22_and_can_open(self):
         # γ/γw = 0.27 log Rf + 0.36 log(qt/pa) + 1.236, Rf = fs/qt*100.
@@ -333,12 +346,16 @@ class TestPorePressureAndUnitWeightLimits:
         low, high = raw(50.0, 0.1), raw(50000.0, 900.0)
         assert low < 14.0
         assert high > 22.0
-        assert site.unit_weight_robertson_cabal_2010([50.0, 50000.0], [0.1, 900.0]) == pytest.approx([14.0, 22.0])
+        assert site.unit_weight_robertson_cabal_2010(
+            [50.0, 50000.0], [0.1, 900.0]
+        ) == pytest.approx([14.0, 22.0])
         opened = site.unit_weight_robertson_cabal_2010(
             [50.0, 50000.0], [0.1, 900.0], gamma_min=None, gamma_max=None
         )
         assert opened == pytest.approx([low, high])
-        floor_only = site.unit_weight_robertson_cabal_2010([50.0, 50000.0], [0.1, 900.0], gamma_max=None)
+        floor_only = site.unit_weight_robertson_cabal_2010(
+            [50.0, 50000.0], [0.1, 900.0], gamma_max=None
+        )
         assert floor_only == pytest.approx([14.0, high])
 
     def test_site_profile_and_triggering_use_the_unit_weight_limits(self):
@@ -354,7 +371,9 @@ class TestPorePressureAndUnitWeightLimits:
         assert np.all(opened.unit_weight < 14.0)
         assert opened.sigma_v[-1] < clipped.sigma_v[-1]
         # A unit weight supplied by the caller is kept, including below the default floor.
-        given = site.site_profile(z, [5000.0, 5000.0, 5000.0], [30.0, 30.0, 30.0], gwt=1.0, unit_weight=12.0)
+        given = site.site_profile(
+            z, [5000.0, 5000.0, 5000.0], [30.0, 30.0, 30.0], gwt=1.0, unit_weight=12.0
+        )
         assert given.unit_weight == pytest.approx([12.0, 12.0, 12.0])
 
         default = liq.triggering_bi2014(z, qt, fs, gwt=5.0, mw=7.5, amax=0.2)
@@ -380,7 +399,9 @@ class TestPorePressureAndUnitWeightLimits:
         custom = liq.triggering_bi2014(z, qt, fs, u0=[0.0, 0.0, 80.0, 120.0], **kw)
         sigma_v = np.array([18.0, 36.0, 54.0, 72.0])
         assert custom.sigma_v == pytest.approx(sigma_v)
-        assert custom.sigma_v_eff == pytest.approx(np.maximum(sigma_v - np.array([0.0, 0.0, 80.0, 120.0]), 1.0))
+        assert custom.sigma_v_eff == pytest.approx(
+            np.maximum(sigma_v - np.array([0.0, 0.0, 80.0, 120.0]), 1.0)
+        )
         assert np.isnan(custom.fsl[0]) and np.isnan(custom.fsl[1])
         assert np.isfinite(base.fsl[1])
         assert not np.allclose(custom.ic, base.ic)
@@ -392,7 +413,9 @@ class TestPorePressureAndUnitWeightLimits:
         qt = np.full(z.size, 6000.0)
         fs = np.full(z.size, 40.0)
         u0 = 5.0 * z
-        res = liq.triggering_bi2014(z, qt, fs, gwt=1.0, mw=7.5, amax=0.2, unit_weight=18.0, u0=u0, max_depth=20.0)
+        res = liq.triggering_bi2014(
+            z, qt, fs, gwt=1.0, mw=7.5, amax=0.2, unit_weight=18.0, u0=u0, max_depth=20.0
+        )
         kept = z <= 20.0
         sigma_v = np.cumsum(18.0 * np.diff(np.r_[0.0, z[kept]]))
         assert res.depth == pytest.approx(z[kept])

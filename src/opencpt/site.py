@@ -28,7 +28,10 @@ def _as_profile(name: str, values, like: np.ndarray) -> np.ndarray:
     if values.ndim == 0:
         return np.full(like.shape, float(values))
     if values.shape != like.shape:
-        raise ValueError(f"{name} must be one value per reading; got shape {values.shape}, expected {like.shape}.")
+        raise ValueError(
+            f"{name} must be one value per reading; got shape {values.shape}, "
+            f"expected {like.shape}."
+        )
     return values.copy()
 
 
@@ -55,7 +58,9 @@ def corrected_cone_resistance(qc, u2, area_ratio: float = 0.8):
     return qc + u2 * (1 - area_ratio)
 
 
-def unit_weight_robertson_cabal_2010(qt, fs, *, gamma_min: float | None = 14.0, gamma_max: float | None = 22.0):
+def unit_weight_robertson_cabal_2010(
+    qt, fs, *, gamma_min: float | None = 14.0, gamma_max: float | None = 22.0
+):
     """Total unit weight from CPT, Robertson & Cabal (2010).
 
     γ/γw = 0.27 log Rf + 0.36 log(qt/pa) + 1.236, with Rf = fs/qt in percent.
@@ -137,7 +142,9 @@ class NormalizedParameters:
     """Excess cone resistance qE = qt - u2 (kPa). NaN when u2 is omitted."""
 
 
-def normalized_parameters(qt, fs, sigma_v, sigma_v_eff, max_iter: int = 30, *, u0=None, u2=None) -> NormalizedParameters:
+def normalized_parameters(
+    qt, fs, sigma_v, sigma_v_eff, max_iter: int = 30, *, u0=None, u2=None
+) -> NormalizedParameters:
     """Ic and the normalized parameters Q, Qtn, n, Fr, Bq, U, qnet and qE.
 
     Ic = sqrt((3.47 - log Qtn)^2 + (log Fr + 1.22)^2), Robertson (2009), with
@@ -288,7 +295,9 @@ def site_profile(
     if gwt is None and u0 is None:
         raise TypeError("gwt is required unless a u0 profile is supplied.")
     if unit_weight is not None and np.ndim(unit_weight) != 0:
-        raise TypeError("unit_weight must be one value in kN/m³, or None for Robertson & Cabal (2010).")
+        raise TypeError(
+            "unit_weight must be one value in kN/m³, or None for Robertson & Cabal (2010)."
+        )
     z = np.asarray(depth, dtype=float)
     qt = np.asarray(qt, dtype=float)
     fs = np.asarray(fs, dtype=float)
@@ -311,6 +320,21 @@ def site_profile(
     sigma_v_eff = np.maximum(sigma_v_eff, 1.0)
     norm = normalized_parameters(qt, fs, sigma_v, sigma_v_eff, u0=u0, u2=u2)
     return SiteProfile(
-        z, qt, fs, gamma, sigma_v, sigma_v_eff, norm.ic, invalid,
-        u0, norm.qnet, norm.qt1, norm.qtn, norm.n, norm.fr, norm.bq, norm.u, norm.qe,
+        z,
+        qt,
+        fs,
+        gamma,
+        sigma_v,
+        sigma_v_eff,
+        norm.ic,
+        invalid,
+        u0,
+        norm.qnet,
+        norm.qt1,
+        norm.qtn,
+        norm.n,
+        norm.fr,
+        norm.bq,
+        norm.u,
+        norm.qe,
     )

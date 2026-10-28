@@ -67,7 +67,12 @@ def test_fsl_matches_digitized_paper_curve(results, mw, sheet, max_rmse):
     if not DIGITIZED.exists():
         pytest.skip("digitized Fig. 3 curves not available")
     dig = pd.read_excel(DIGITIZED, sheet_name=None)
-    d = next(v for k, v in dig.items() if k.strip().lower() == sheet).iloc[:, :2].apply(pd.to_numeric, errors="coerce").dropna()
+    d = (
+        next(v for k, v in dig.items() if k.strip().lower() == sheet)
+        .iloc[:, :2]
+        .apply(pd.to_numeric, errors="coerce")
+        .dropna()
+    )
     a, b = d.iloc[:, 0].to_numpy(), d.iloc[:, 1].to_numpy()
     paper_z, paper_fs = (a, b) if a.max() > b.max() else (b, a)
 
