@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.0a3 (2026-10-28)
+
+- Liquefaction triggering by Robertson & Wride (1998), on Robertson (2009) Qtn and Ic:
+  `triggering_robertson2009`. Returns Kc, Qtn,cs, CRR7.5, MSF, Kσ, rd, CSR and the
+  factor of safety at each depth.
+- Kc is 1 at Ic ≤ 1.64, the Robertson & Wride polynomial above that, and 1 again where
+  1.64 < Ic < 2.36 and Fr < 0.5%. Ic > 2.6 has no factor of safety. Qtn,cs ≥ 160 is
+  not liquefiable.
+- CSR uses the NCEER rd (Liao & Whitman, extended below 23 m as in the workshop summary)
+  and the Youd et al. (2001) magnitude scaling factor. Kσ stays 1 unless an exponent is passed.
+
 ## 0.1.0a2 (2026-10-28)
 
 - `site_profile` returns Q (Qt1), Qtn, n, Fr, Bq, U, qnet, qE and u0 with Ic.
