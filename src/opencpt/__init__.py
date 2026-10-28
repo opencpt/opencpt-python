@@ -1,4 +1,7 @@
-"""opencpt: open-source CPT (cone penetration test) analysis: liquefaction triggering and shear wave velocity."""
+"""opencpt: open-source CPT (cone penetration test) analysis.
+
+Liquefaction triggering and shear wave velocity.
+"""
 
 from . import liquefaction, shear_wave, site
 from .liquefaction import TriggeringResult, triggering_bi2014

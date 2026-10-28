@@ -129,7 +129,8 @@ class TestInvalidReadings:
         assert np.isfinite(r.sigma_v).all()
         assert r.invalid.tolist() == [i == 3 for i in range(self.z.size)]
         assert np.isnan(r.fsl[3])
-        # Readings below the gap match the complete profile (uniform soil, so interpolation is exact).
+        # Readings below the gap match the complete profile (uniform soil, so interpolation
+        # is exact).
         assert r.fsl[4:] == pytest.approx(clean.fsl[4:])
 
     @pytest.mark.parametrize("qt_bad, fs_bad", [(-300.0, 30.0), (0.0, 30.0), (5000.0, -2.0)])

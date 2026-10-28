@@ -29,7 +29,8 @@ def _as_profile(name: str, values, like: np.ndarray) -> np.ndarray:
         return np.full(like.shape, float(values))
     if values.shape != like.shape:
         raise ValueError(
-            f"{name} must be one value per reading; got shape {values.shape}, expected {like.shape}."
+            f"{name} must be one value per reading; got shape {values.shape}, "
+            f"expected {like.shape}."
         )
     return values.copy()
 

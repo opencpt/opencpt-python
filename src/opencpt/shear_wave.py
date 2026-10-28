@@ -64,7 +64,8 @@ def vs_assaf2023_mg15_qc(qc, fs, depth):
 
 
 def time_averaged_vs(depth, vs, z_max: float = 30.0):
-    """Time-averaged Vs (m/s) from the ground surface to `z_max`, or to the deepest reading if shallower.
+    """Time-averaged Vs (m/s) from the ground surface to `z_max`, or to the deepest reading
+    if shallower.
 
     Vs_z = z / Σ(h / Vs). As for the stresses, each reading's Vs applies to the interval above it,
     starting from the ground surface; readings without Vs are skipped, so the next reading spans

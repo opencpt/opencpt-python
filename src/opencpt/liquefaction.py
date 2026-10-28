@@ -25,7 +25,8 @@ RD_MAX_DEPTH = 34.0
 """Depth (m) to which the rd equations apply (Idriss & Boulanger 2008, after Eq. 24)."""
 
 RD_RECOMMENDED_DEPTH = 20.0
-"""Below about this depth (m), Idriss & Boulanger (2008) recommend CSR from site response analysis."""
+"""Below about this depth (m), Idriss & Boulanger (2008) recommend CSR from site response
+analysis."""
 
 
 def fines_content_bi2014(ic, cfc: float = 0.0):
