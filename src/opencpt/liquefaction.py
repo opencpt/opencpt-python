@@ -74,7 +74,9 @@ def stress_reduction_coefficient(depth, mw: float):
     """
     z = np.asarray(depth, dtype=float)
     if np.any(z > RD_MAX_DEPTH):
-        raise ValueError(f"rd is defined only to {RD_MAX_DEPTH:g} m depth; got {float(np.nanmax(z)):g} m.")
+        raise ValueError(
+            f"rd is defined only to {RD_MAX_DEPTH:g} m depth; got {float(np.nanmax(z)):g} m."
+        )
     alpha = -1.012 - 1.126 * np.sin(z / 11.73 + 5.133)
     beta = 0.106 + 0.118 * np.sin(z / 11.28 + 5.142)
     return np.exp(alpha + beta * mw)
@@ -98,7 +100,7 @@ def magnitude_scaling_factor_bi2014(mw: float, qc1ncs):
 def overburden_correction_bi2014(sigma_v_eff, qc1ncs):
     """Kσ = 1 - Cσ ln(σ'v/pa) ≤ 1.1, with Cσ = 1/(37.3 - 8.27 qc1Ncs^0.264) ≤ 0.3."""
     q = np.minimum(np.asarray(qc1ncs, dtype=float), 211)
-    c_sigma = np.minimum(1 / (37.3 - 8.27 * q ** 0.264), 0.3)
+    c_sigma = np.minimum(1 / (37.3 - 8.27 * q**0.264), 0.3)
     return np.minimum(1 - c_sigma * np.log(np.maximum(np.asarray(sigma_v_eff), 1.0) / PA), 1.1)
 
 
@@ -134,7 +136,9 @@ def critical_layers(depth, fsl, min_thickness: float = 0.4, max_gap: float = 0.1
             else:
                 runs.append([start, i])
             start = None
-    return [(float(z[s]), float(z[e - 1])) for s, e in runs if z[e - 1] - z[s] >= min_thickness - 1e-9]
+    return [
+        (float(z[s]), float(z[e - 1])) for s, e in runs if z[e - 1] - z[s] >= min_thickness - 1e-9
+    ]
 
 
 @dataclass
@@ -217,18 +221,28 @@ def triggering_bi2014(
         c0: CRR curve constant; 2.80 for the deterministic relationship.
     """
     if max_depth > RD_MAX_DEPTH:
-        raise ValueError(f"max_depth can be at most {RD_MAX_DEPTH:g} m, the depth to which rd is defined.")
+        raise ValueError(
+            f"max_depth can be at most {RD_MAX_DEPTH:g} m, the depth to which rd is defined."
+        )
     depth = np.asarray(depth, dtype=float)
     keep = depth <= max_depth
     if u0 is not None:
         u0 = np.asarray(u0, dtype=float)
         if u0.ndim != 0:
             if u0.shape != depth.shape:
-                raise ValueError(f"u0 must be one value per depth; got shape {u0.shape}, expected {depth.shape}.")
+                raise ValueError(
+                    f"u0 must be one value per depth; got shape {u0.shape}, expected {depth.shape}."
+                )
             u0 = u0[keep]
     site = site_profile(
-        depth[keep], np.asarray(qt, dtype=float)[keep], np.asarray(fs, dtype=float)[keep], gwt, unit_weight,
-        u0=u0, gamma_min=gamma_min, gamma_max=gamma_max,
+        depth[keep],
+        np.asarray(qt, dtype=float)[keep],
+        np.asarray(fs, dtype=float)[keep],
+        gwt,
+        unit_weight,
+        u0=u0,
+        gamma_min=gamma_min,
+        gamma_max=gamma_max,
     )
     z, qt, gamma, invalid = site.depth, site.qt, site.unit_weight, site.invalid
     sigma_v, sigma_v_eff, ic = site.sigma_v, site.sigma_v_eff, site.ic
@@ -236,7 +250,11 @@ def triggering_bi2014(
     q1, _ = qc1ncs_bi2014(qt, sigma_v_eff, fc)
 
     csr = cyclic_stress_ratio(amax, sigma_v, sigma_v_eff, stress_reduction_coefficient(z, mw))
-    crr = crr_m75_bi2014(q1, c0) * magnitude_scaling_factor_bi2014(mw, q1) * overburden_correction_bi2014(sigma_v_eff, q1)
+    crr = (
+        crr_m75_bi2014(q1, c0)
+        * magnitude_scaling_factor_bi2014(mw, q1)
+        * overburden_correction_bi2014(sigma_v_eff, q1)
+    )
     fsl = crr / csr
     # Default keeps the z <= gwt mask. A supplied profile uses u0 <= 0, which is the
     # same mask when that profile is the hydrostatic one from gwt.
@@ -244,8 +262,19 @@ def triggering_bi2014(
     fsl[(ic >= ic_cutoff) | unsaturated | invalid] = np.nan
 
     return TriggeringResult(
-        depth=z, qt=qt, unit_weight=gamma, sigma_v=sigma_v, sigma_v_eff=sigma_v_eff, ic=ic, fc=fc,
-        qc1ncs=q1, csr=csr, crr=crr, fsl=fsl, invalid=invalid, critical_layers=critical_layers(z, fsl, min_thickness),
+        depth=z,
+        qt=qt,
+        unit_weight=gamma,
+        sigma_v=sigma_v,
+        sigma_v_eff=sigma_v_eff,
+        ic=ic,
+        fc=fc,
+        qc1ncs=q1,
+        csr=csr,
+        crr=crr,
+        fsl=fsl,
+        invalid=invalid,
+        critical_layers=critical_layers(z, fsl, min_thickness),
     )
 
 

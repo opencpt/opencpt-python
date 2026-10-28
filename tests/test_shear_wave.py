@@ -39,7 +39,9 @@ def test_invalid_readings_give_nan():
 
 
 def test_mg15_qc_raises_zero_fs_to_minimum():
-    assert sw.vs_assaf2023_mg15_qc(5000, 0.0, 5) == pytest.approx(sw.vs_assaf2023_mg15_qc(5000, sw.FS_MIN, 5))
+    assert sw.vs_assaf2023_mg15_qc(5000, 0.0, 5) == pytest.approx(
+        sw.vs_assaf2023_mg15_qc(5000, sw.FS_MIN, 5)
+    )
 
 
 def test_time_averaged_vs_by_hand():
@@ -57,5 +59,7 @@ def test_time_averaged_vs_of_a_shallow_sounding_covers_its_depth():
 
 
 def test_time_averaged_vs_skips_readings_without_vs():
-    assert sw.time_averaged_vs([10, 20, 30], [100, np.nan, 200]) == pytest.approx((30 / (0.1 + 0.1), 30.0))
+    assert sw.time_averaged_vs([10, 20, 30], [100, np.nan, 200]) == pytest.approx(
+        (30 / (0.1 + 0.1), 30.0)
+    )
     assert sw.time_averaged_vs([10], [np.nan])[1] == 0.0

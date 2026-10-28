@@ -33,7 +33,12 @@ def vs_assaf2023_a07(qt, ic, depth):
         ic: Soil behaviour type index, Robertson (2009).
         depth: Depth below ground surface (m).
     """
-    return np.exp(3.25 + 0.15 * np.log(_positive(qt)) + 0.214 * np.log(_positive(ic)) + 0.193 * np.log(_positive(depth)))
+    return np.exp(
+        3.25
+        + 0.15 * np.log(_positive(qt))
+        + 0.214 * np.log(_positive(ic))
+        + 0.193 * np.log(_positive(depth))
+    )
 
 
 def vs_assaf2023_mg15_qc(qc, fs, depth):
@@ -50,7 +55,12 @@ def vs_assaf2023_mg15_qc(qc, fs, depth):
     """
     fs = np.asarray(fs, dtype=float)
     fs = np.where(fs >= 0, np.maximum(fs, FS_MIN), np.nan)
-    return np.exp(3.81 + 0.0884 * np.log(_positive(qc)) + 0.0132 * np.log(fs) + 0.226 * np.log(_positive(depth)))
+    return np.exp(
+        3.81
+        + 0.0884 * np.log(_positive(qc))
+        + 0.0132 * np.log(fs)
+        + 0.226 * np.log(_positive(depth))
+    )
 
 
 def time_averaged_vs(depth, vs, z_max: float = 30.0):

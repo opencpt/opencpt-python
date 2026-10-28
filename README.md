@@ -26,9 +26,9 @@ u2 = np.where(depth < 2, 40.0, 9.81 * np.clip(depth - 1.5, 0, None))
 
 qt = corrected_cone_resistance(qc, u2, area_ratio=0.8)
 result = triggering_bi2014(depth, qt, fs, gwt=1.5, mw=7.5, amax=0.3)
-result.critical_layers      # [(2.0, 10.0)]
-result.critical_thickness   # 8.0 m
-result.fsl                  # factor of safety per reading; NaN where not assessed
+result.critical_layers  # [(2.0, 10.0)]
+result.critical_thickness  # 8.0 m
+result.fsl  # factor of safety per reading; NaN where not assessed
 
 site = site_profile(depth, qt, fs, gwt=1.5)
 vs = vs_assaf2023_a07(site.qt, site.ic, depth)
