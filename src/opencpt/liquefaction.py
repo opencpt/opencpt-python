@@ -4,15 +4,16 @@ Boulanger, R.W., Idriss, I.M. (2014). CPT and SPT based liquefaction triggering
 procedures. Report UCD/CGM-14/01, University of California, Davis.
 
 Robertson, P.K., Wride, C.E. (1998). Evaluating cyclic liquefaction potential using
-the cone penetration test. Canadian Geotechnical Journal 35(3): 442-459, as updated
-by Robertson (2009) to normalised cone resistance Qtn and adopted for routine use by
-Youd et al. (2001).
+the cone penetration test. Canadian Geotechnical Journal 35(3): 442-459. Youd et al.
+(2001) adopted that qc1N clean-sand curve for routine use. `triggering_robertson2009`
+evaluates the same curve on Robertson (2009) normalised cone resistance Qtn.
 
 Inputs and outputs are NumPy arrays in SI units (m, kPa) unless stated otherwise.
 """
 
 from __future__ import annotations
 
+import warnings
 from dataclasses import dataclass
 
 import numpy as np
@@ -32,6 +33,9 @@ RD_MAX_DEPTH = 34.0
 RD_RECOMMENDED_DEPTH = 20.0
 """Below about this depth (m), Idriss & Boulanger (2008) recommend CSR from site response
 analysis."""
+
+NCEER_ROUTINE_DEPTH = 23.0
+"""Depth (m) to which Youd et al. (2001) recommend Liao & Whitman rd for routine work."""
 
 
 def fines_content_bi2014(ic, cfc: float = 0.0):
@@ -185,18 +189,22 @@ def stress_reduction_coefficient_nceer(depth):
     summary. Youd et al. (2001) endorse the Liao & Whitman branches for routine work
     and treat liquefaction calculations below about 23 m as outside the range the
     simplified procedure has been checked against. This is not the magnitude-dependent
-    Idriss rd used by `stress_reduction_coefficient`.
+    Idriss rd used by `stress_reduction_coefficient`. `triggering_robertson2009`
+    withholds the factor of safety below `max_depth` (23 m by default) for that reason.
 
-    Depths above the ground surface raise ValueError.
+    A non-finite depth returns NaN rather than the deep-tail value 0.50. Depths above
+    the ground surface raise ValueError.
     """
     z = np.asarray(depth, dtype=float)
-    if np.any(z < 0):
+    finite = np.isfinite(z)
+    if np.any(finite & (z < 0)):
         raise ValueError("rd is defined for depths at or below the ground surface.")
-    return np.select(
+    rd = np.select(
         [z <= 9.15, z <= 23.0, z <= 30.0],
         [1.0 - 0.00765 * z, 1.174 - 0.0267 * z, 0.744 - 0.008 * z],
         default=0.50,
     )
+    return np.where(finite, rd, np.nan)
 
 
 def magnitude_scaling_factor_youd2001(mw: float, bound: str = "idriss"):
@@ -221,8 +229,8 @@ def magnitude_scaling_factor_youd2001(mw: float, bound: str = "idriss"):
     `bound="andrus_stokoe"`, upper bound for Mw < 7.5, Andrus & Stokoe (1997) as
     fitted by Youd et al. (2001):
         MSF = (Mw/7.5)^(-3.3)
-    Youd et al. do not recommend this upper bound for Mw > 7.5; the equation is still
-    evaluated so the choice stays explicit.
+    Youd et al. allow only the Idriss factor for Mw > 7.5. The equation is still
+    evaluated, and a UserWarning is issued in that case.
 
     The later Idriss factor MSF = 6.9 exp(-Mw/4) - 0.058 is not used. Youd et al.
     (2001) set it aside because it belongs with a magnitude-dependent rd, not with
@@ -233,21 +241,34 @@ def magnitude_scaling_factor_youd2001(mw: float, bound: str = "idriss"):
     if bound == "idriss":
         return float(10.0**2.24 / mw**2.56)
     if bound == "andrus_stokoe":
+        if mw > 7.5:
+            warnings.warn(
+                "Youd et al. (2001) recommend the Idriss MSF for Mw > 7.5; "
+                "the Andrus & Stokoe factor is only the upper bound for smaller magnitudes.",
+                UserWarning,
+                stacklevel=2,
+            )
         return float((mw / 7.5) ** -3.3)
     raise ValueError("bound must be 'idriss' or 'andrus_stokoe'.")
 
 
 def overburden_correction_youd2001(sigma_v_eff, f: float):
-    """Overburden factor Kσ = (σ'v/pa)^(f-1), Hynes & Olsen (1999).
+    """Overburden factor Kσ = min(1, (σ'v/pa)^(f-1)), Hynes & Olsen (1999).
 
-    Recommended by Youd et al. (2001). f is about 0.7-0.8 at relative density 40-60%
-    and 0.6-0.7 at 60-80%; the lower f is the less severe reduction at high stress.
-    σ'v below pa gives Kσ above 1. Robertson (2009) does not apply this factor: the
-    stress exponent inside Qtn already follows effective stress, and his case-history
-    check used Kσ = 1. `triggering_robertson2009` follows that unless `k_sigma_f` is set.
+    Youd et al. (2001), including Fig. 15, cap Kσ at 1, so a stress below atmospheric
+    pressure does not raise CRR. f is the exponent. The workshop recommends about
+    0.7-0.8 at relative density 40-60% and 0.6-0.7 at 60-80%; the lower f is the
+    less severe reduction at high stress. Any f in (0, 1] is accepted so the equation
+    can be evaluated outside that band. f <= 0 or f > 1 raises ValueError.
+
+    Robertson (2009) does not apply this factor: the stress exponent inside Qtn
+    already follows effective stress, and his case-history check used Kσ = 1.
+    `triggering_robertson2009` follows that unless `k_sigma_f` is set.
     """
+    if not 0.0 < f <= 1.0:
+        raise ValueError("f must be in (0, 1]; Youd et al. (2001) recommend about 0.6 to 0.8.")
     sig = np.maximum(np.asarray(sigma_v_eff, dtype=float), 1.0)
-    return (sig / PA) ** (f - 1.0)
+    return np.minimum(1.0, (sig / PA) ** (f - 1.0))
 
 
 def critical_layers(depth, fsl, min_thickness: float = 0.4, max_gap: float = 0.1):
@@ -419,9 +440,11 @@ def triggering_bi2014(
 class RobertsonTriggeringResult:
     """Robertson (2009) triggering for one earthquake, on the Robertson & Wride curve.
 
-    `fsl` is NaN where liquefaction is not assessed: above the water table, Ic above
-    the cutoff (sample and test), or an invalid reading. It is infinite where
-    Qtn,cs is at or above 160, which the curve classes as too dense to liquefy.
+    `fsl` is infinite where Qtn,cs is at or above 160, which the curve classes as too
+    dense to liquefy. It is NaN where liquefaction is not assessed: above the water
+    table, Ic above the cutoff (sample and test), an invalid reading, or deeper than
+    `max_depth`. Those withhold flags override the infinite value, so a dry, clay-like,
+    invalid, or too-deep reading with Qtn,cs >= 160 still has NaN.
     `k_sigma` is 1 at every depth unless an exponent was passed to the triggering
     function. `loose_sand_zone` is the Fr < 0.5% band in which Kc is held at 1 when
     the screen is on.
@@ -452,6 +475,8 @@ class RobertsonTriggeringResult:
     """True where Qtn,cs >= 160. The clean-sand curve does not extend there."""
     above_water_table: np.ndarray
     """True where the reading is dry: z <= gwt, or u0 <= 0 when a profile was supplied."""
+    beyond_verified_depth: np.ndarray
+    """True below 23 m, where Youd et al. (2001) do not recommend routine use of this rd."""
     loose_sand_zone: np.ndarray
     """True where 1.64 < Ic < 2.36 and Fr < 0.5%."""
     invalid: np.ndarray
@@ -489,12 +514,14 @@ def triggering_robertson2009(
     loose_sand_screen: bool = True,
     msf: str = "idriss",
     k_sigma_f: float | None = None,
+    max_depth: float = NCEER_ROUTINE_DEPTH,
     min_thickness: float = 0.4,
 ) -> RobertsonTriggeringResult:
     """Deterministic liquefaction triggering, Robertson & Wride (1998) / Robertson (2009).
 
-    Qtn, Ic, n and Fr come from `opencpt.site.site_profile` (Robertson 2009). The
-    resistance curve, Kc and the clean-sand equivalent are Robertson & Wride (1998).
+    Youd et al. (2001) adopted the Robertson & Wride (1998) qc1N clean-sand curve.
+    This function evaluates that curve on Robertson (2009) Qtn. Qtn, Ic, n and Fr
+    come from `opencpt.site.site_profile`. Kc is the Robertson & Wride polynomial.
     CSR uses Liao & Whitman / NCEER rd (`stress_reduction_coefficient_nceer`) and the
     Youd et al. (2001) magnitude scaling factor. Kσ is 1. Robertson (2009) built the
     stress exponent in Qtn so a separate overburden factor is not required, and the
@@ -519,14 +546,22 @@ def triggering_robertson2009(
         gamma_min: Lower limit (kN/m³) on the Robertson & Cabal unit weight. Default 14.
         gamma_max: Upper limit (kN/m³). Default 22.
         ic_cutoff: Ic above this value is not given a factor of safety (default 2.6).
-            The comparison is strict. Those soils need a sample and a lab test.
+            The comparison is strict, as in Youd et al. (2001): Ic greater than 2.6 is
+            too clay-rich for this curve and needs a sample. Ic equal to 2.6 stays on it.
         qtn_cs_limit: Upper end of the CRR curve. Qtn,cs at or above this is not
             liquefiable (default 160, the published end of the curve).
         loose_sand_screen: Set Kc = 1 for 1.64 < Ic < 2.36 and Fr < 0.5%.
         msf: "idriss" or "andrus_stokoe". See `magnitude_scaling_factor_youd2001`.
-        k_sigma_f: Exponent f of the Youd et al. (2001) Kσ, or None to leave Kσ = 1.
+        k_sigma_f: Exponent f of the Youd et al. (2001) Kσ, in (0, 1], or None to leave
+            Kσ = 1. The workshop recommends about 0.6 to 0.8. The factor is capped at 1.
+        max_depth: Deepest reading given a factor of safety (m). Default 23, the depth
+            to which Youd et al. (2001) recommend Liao & Whitman rd. Deeper readings stay
+            in the result with no factor of safety. Raise this to opt into the 1997 rd
+            extension; `beyond_verified_depth` stays set below 23 m either way.
         min_thickness: Minimum critical layer thickness (m).
     """
+    if not np.isfinite(max_depth) or max_depth < 0:
+        raise ValueError("max_depth must be a finite depth in metres, at least 0.")
     depth = np.asarray(depth, dtype=float)
     supplied_u0 = None if u0 is None else np.asarray(u0, dtype=float)
     site = site_profile(
@@ -559,8 +594,11 @@ def triggering_robertson2009(
     not_liquefiable = np.isfinite(qtn_cs) & (qtn_cs >= qtn_cs_limit)
     not_susceptible = np.isfinite(ic) & (ic > ic_cutoff)
     above_water_table = (z <= gwt) if supplied_u0 is None else (site.u0 <= 0)
+    beyond_verified_depth = z > NCEER_ROUTINE_DEPTH
     fsl = np.where(not_liquefiable, np.inf, fsl)
-    withhold = not_susceptible | above_water_table | site.invalid
+    # Withhold after the infinite "too dense" value, so a dry, clay-like, invalid,
+    # or too-deep reading is NaN even when Qtn,cs is past the curve.
+    withhold = not_susceptible | above_water_table | site.invalid | (z > max_depth)
     fsl = np.where(withhold, np.nan, fsl)
 
     return RobertsonTriggeringResult(
@@ -586,6 +624,7 @@ def triggering_robertson2009(
         not_susceptible=not_susceptible,
         not_liquefiable=not_liquefiable,
         above_water_table=above_water_table,
+        beyond_verified_depth=beyond_verified_depth,
         loose_sand_zone=loose & np.isfinite(ic),
         invalid=site.invalid,
         critical_layers=critical_layers(z, fsl, min_thickness),
@@ -594,6 +633,7 @@ def triggering_robertson2009(
 
 __all__ = [
     "C0_DETERMINISTIC",
+    "NCEER_ROUTINE_DEPTH",
     "RD_MAX_DEPTH",
     "RD_RECOMMENDED_DEPTH",
     "RobertsonTriggeringResult",

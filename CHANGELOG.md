@@ -9,7 +9,9 @@
   1.64 < Ic < 2.36 and Fr < 0.5%. Ic > 2.6 has no factor of safety. Qtn,cs ≥ 160 is
   not liquefiable.
 - CSR uses the NCEER rd (Liao & Whitman, extended below 23 m as in the workshop summary)
-  and the Youd et al. (2001) magnitude scaling factor. Kσ stays 1 unless an exponent is passed.
+  and the Youd et al. (2001) magnitude scaling factor. The factor of safety is withheld
+  below `max_depth` (23 m by default). Kσ stays 1 unless an exponent is passed, and is
+  then capped at 1.
 
 ## 0.1.0a2 (2026-10-28)
 

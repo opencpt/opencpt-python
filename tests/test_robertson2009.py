@@ -18,6 +18,7 @@ Published checks, each intermediate recomputed from the cited equation:
 """
 
 import math
+import warnings
 
 import numpy as np
 import pytest
@@ -106,11 +107,17 @@ class TestCrrAndRdAndMsf:
         assert rd[4] == pytest.approx(0.744 - 0.008 * 30.0)
         assert rd[5] == pytest.approx(0.50)
         assert rd[6] == pytest.approx(0.50)
+        # A missing depth is not the deep tail.
+        missing = liq.stress_reduction_coefficient_nceer([10.0, np.nan, np.inf])
+        assert missing[0] == pytest.approx(1.174 - 0.0267 * 10.0)
+        assert math.isnan(missing[1]) and math.isnan(missing[2])
         # Not the Idriss rd used by Boulanger & Idriss.
         idriss = liq.stress_reduction_coefficient([10.0], 7.5)[0]
         assert rd[2] != pytest.approx(idriss, abs=0.01)
         with pytest.raises(ValueError, match="ground surface"):
             liq.stress_reduction_coefficient_nceer([-0.1])
+        with pytest.raises(ValueError, match="ground surface"):
+            liq.stress_reduction_coefficient_nceer([5.0, np.nan, -1.0])
 
     @pytest.mark.parametrize(
         "mw, table",
@@ -140,7 +147,15 @@ class TestCrrAndRdAndMsf:
         [(5.5, 2.8), (6.0, 2.1), (6.5, 1.6), (7.0, 1.25), (7.5, 1.0), (8.0, 0.8), (8.5, 0.65)],
     )
     def test_andrus_stokoe_upper_bound_matches_the_youd_table(self, mw, table):
-        got = liq.magnitude_scaling_factor_youd2001(mw, "andrus_stokoe")
+        # Youd et al. allow this factor only below Mw 7.5. Above that it still
+        # evaluates, and warns.
+        if mw > 7.5:
+            with pytest.warns(UserWarning, match="Mw > 7.5"):
+                got = liq.magnitude_scaling_factor_youd2001(mw, "andrus_stokoe")
+        else:
+            with warnings.catch_warnings():
+                warnings.simplefilter("error", UserWarning)
+                got = liq.magnitude_scaling_factor_youd2001(mw, "andrus_stokoe")
         assert got == pytest.approx((mw / 7.5) ** -3.3)
         assert got == pytest.approx(table, abs=0.02)
 
@@ -154,8 +169,16 @@ class TestCrrAndRdAndMsf:
         assert liq.overburden_correction_youd2001([site.PA], 0.7)[0] == pytest.approx(1.0)
         # f = 0.7, σ'v = 2 pa: Kσ = 2^(-0.3).
         assert liq.overburden_correction_youd2001([2 * site.PA], 0.7)[0] == pytest.approx(2.0**-0.3)
-        # Below pa the Hynes & Olsen factor is greater than 1.
-        assert liq.overburden_correction_youd2001([0.5 * site.PA], 0.8)[0] > 1.0
+        # Below pa the uncapped power exceeds 1. Youd et al. (2001) Fig. 15 caps Kσ at 1.
+        assert (0.5) ** (0.8 - 1.0) > 1.0
+        assert liq.overburden_correction_youd2001([0.5 * site.PA], 0.8)[0] == pytest.approx(1.0)
+        # f outside the workshop band 0.6-0.8 is accepted inside (0, 1].
+        assert liq.overburden_correction_youd2001([2 * site.PA], 0.5)[0] == pytest.approx(2.0**-0.5)
+        assert liq.overburden_correction_youd2001([2 * site.PA], 1.0)[0] == pytest.approx(1.0)
+        with pytest.raises(ValueError, match="0, 1"):
+            liq.overburden_correction_youd2001([site.PA], 0.0)
+        with pytest.raises(ValueError, match="0, 1"):
+            liq.overburden_correction_youd2001([site.PA], 1.2)
 
 
 class TestCaltransNceerExample:
@@ -173,9 +196,8 @@ class TestCaltransNceerExample:
         # The slide says Ic = 2.30 gives Kc = 2.03, then 2.03*41.42 = 84.16.
         # The polynomial at Ic = 2.30 is 1.949. Kc = 2.032 is the polynomial at Ic ≈ 2.325.
         assert liq.correction_factor_kc([2.30], [1.5])[0] == pytest.approx(1.9487, abs=1e-4)
-        assert 84.16 / 41.42 == pytest.approx(2.032, abs=1e-3)
-        # FS = (0.14/0.38)*1.19 = 0.438. The slide prints 0.42.
-        assert (0.14 / 0.38) * 1.19 == pytest.approx(0.4384, abs=1e-4)
+        # The slide's Kc = 84.16/41.42 = 2.03 is the polynomial near Ic 2.33, not at 2.30.
+        # Its printed FS of 0.42 is not (0.14/0.38)*1.19. Neither number is asserted.
 
 
 class TestHandCalculation:
@@ -268,6 +290,44 @@ class TestHandCalculation:
         assert res.crr75 == pytest.approx([crr], rel=1e-6)
         assert np.isfinite(res.fsl[0])
 
+    def test_end_to_end_when_effective_stress_is_not_atmospheric(self):
+        # One reading, hand-calculated without calling the library.
+        # z = 6 m, γ = 18 kN/m³, water table at 1 m, qt = 9000 kPa, fs = 70 kPa,
+        # Mw = 7.5, amax = 0.30 g. pa = 101.325 kPa.
+        #
+        # σv = 18*6 = 108 kPa
+        # u0 = 9.81*5 = 49.05 kPa
+        # σ'v = 108 - 49.05 = 58.95 kPa, which is not pa
+        # qnet = 9000 - 108 = 8892 kPa
+        # Fr = 70/8892*100 = 0.7872%
+        #
+        # Robertson (2009), n from 1, stop when n changes by less than 1e-4.
+        # Qtn = (qnet/pa)*(pa/σ'v)^n.
+        #   n = 1:        Qtn = 150.840, Ic = 1.7069, next n = 0.5294
+        #   n = 0.52943:  Qtn = 116.902, Ic = 1.7921, next n = 0.5619
+        #   n = 0.56190:  Qtn = 118.976, Ic = 1.7862, next n = 0.5596
+        #   n = 0.55962:  Qtn = 118.830, Ic = 1.7866, next n = 0.5598
+        #   n = 0.55978:  Qtn = 118.840, Ic = 1.7866  (stop; this n was used)
+        #
+        # Ic = 1.787 > 1.64 and Fr is not below 0.5%, so the polynomial applies:
+        #   Kc = 1.097
+        #   Qtn,cs = 1.097*118.840 = 130.366
+        #   CRR7.5 = 93*(130.366/1000)^3 + 0.08 = 0.2861
+        #   rd = 1 - 0.00765*6 = 0.9541
+        #   MSF = 10^2.24/7.5^2.56 = 0.9996
+        #   CSR = 0.65*0.30*(108/58.95)*0.9541 = 0.3409
+        #   FS = 0.2861/0.3409*0.9996 = 0.8389
+        res = liq.triggering_robertson2009(
+            [6.0], [9000.0], [70.0], gwt=1.0, mw=7.5, amax=0.30, unit_weight=18.0
+        )
+        assert res.sigma_v[0] == pytest.approx(108.0)
+        assert res.sigma_v_eff[0] == pytest.approx(58.95, abs=1e-9)
+        assert abs(res.sigma_v_eff[0] - site.PA) > 1.0
+        assert res.qtn[0] == pytest.approx(118.840, abs=0.01)
+        assert res.qtn_cs[0] == pytest.approx(130.366, abs=0.01)
+        assert res.fsl[0] == pytest.approx(0.8389, abs=0.001)
+        assert not res.beyond_verified_depth[0]
+
 
 class TestFlags:
     def _run(self, z, qt, fs, **kw):
@@ -304,6 +364,10 @@ class TestFlags:
         assert math.isinf(res.fsl[0])
         assert math.isnan(res.crr75[0])
         assert res.critical_layers == []
+        # A dry reading past the curve is withheld (NaN), not left infinite.
+        dry = self._run([0.5], [50000.0], [80.0], gwt=2.0, amax=0.5)
+        assert dry.not_liquefiable[0] and dry.above_water_table[0]
+        assert math.isnan(dry.fsl[0])
         # A limit just above the computed Qtn,cs puts the point back on the curve.
         opened = self._run([3.0], [50000.0], [80.0], amax=0.5, qtn_cs_limit=res.qtn_cs[0] + 1)
         assert not opened.not_liquefiable[0]
@@ -354,11 +418,25 @@ class TestFlags:
         # rd below 9.15 m does not depend on magnitude. The two runs share it.
         assert andrus.rd == pytest.approx(idriss.rd)
 
-    def test_deep_reading_uses_the_extended_rd(self):
-        res = self._run([25.0], [12000.0], [60.0], gwt=2.0)
-        assert res.rd[0] == pytest.approx(0.744 - 0.008 * 25.0)
-        deeper = self._run([32.0], [14000.0], [70.0], gwt=2.0)
-        assert deeper.rd[0] == pytest.approx(0.50)
+    def test_routine_depth_stops_at_23_m_unless_the_extension_is_requested(self):
+        at_limit = self._run([23.0], [12000.0], [60.0], gwt=2.0)
+        assert not at_limit.beyond_verified_depth[0]
+        assert np.isfinite(at_limit.fsl[0])
+        below = self._run([25.0], [12000.0], [60.0], gwt=2.0)
+        assert below.beyond_verified_depth[0]
+        assert math.isnan(below.fsl[0])
+        # rd is still the 1997 extension; only the factor of safety is withheld.
+        assert below.rd[0] == pytest.approx(0.744 - 0.008 * 25.0)
+        opted = self._run([25.0, 32.0], [12000.0, 14000.0], [60.0, 70.0], gwt=2.0, max_depth=40.0)
+        assert opted.beyond_verified_depth.tolist() == [True, True]
+        assert np.isfinite(opted.fsl).all()
+        assert opted.rd[1] == pytest.approx(0.50)
+        with pytest.raises(ValueError, match="max_depth"):
+            self._run([5.0], [8000.0], [40.0], max_depth=-1.0)
+
+    def test_k_sigma_f_outside_zero_to_one_is_rejected(self):
+        with pytest.raises(ValueError, match="0, 1"):
+            self._run([4.0], [8000.0], [40.0], k_sigma_f=1.5)
 
     def test_critical_layer_skips_clay_and_keeps_a_loose_sand_run(self):
         z = np.round(np.arange(0.5, 6.01, 0.5), 2)
