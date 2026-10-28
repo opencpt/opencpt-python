@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.0a2 (2026-10-28)
+
+- `site_profile` returns Q (Qt1), Qtn, n, Fr, Bq, U, qnet, qE and u0 with Ic.
+  Bq, U and qE are NaN unless `u2` is supplied. `normalized_parameters` returns the same
+  set from stresses already in hand. `soil_behaviour_type_index` still returns only Ic.
+- Optional pore-pressure profile `u0` on `vertical_stresses`, `site_profile` and
+  `triggering_bi2014`. Omitted, u0 stays hydrostatic from the groundwater depth.
+- Robertson & Cabal unit weight accepts `gamma_min` and `gamma_max` (default 14 and 22 kN/m³).
+  Pass None to leave a side open. A unit weight supplied by the caller is not clipped.
+- `qc1ncs_bi2014` still normalizes qt rather than the measured qc. The docstring records that choice.
+
 ## 0.1.0a1 (2026-10-17)
 
 First alpha.

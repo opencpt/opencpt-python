@@ -39,6 +39,12 @@ def qc1ncs_bi2014(qt, sigma_v_eff, fc, max_iter: int = 50):
     qc1N = CN qt/pa with CN = (pa/σ'v)^m ≤ 1.7 and m = 1.338 - 0.249 qc1Ncs^0.264
     (qc1Ncs limited to 21-254), plus the fines adjustment Δqc1N.
 
+    Boulanger & Idriss (2014) write qc1N = CN qc/pa, using the measured cone tip
+    resistance qc. This function uses the corrected resistance qt instead
+    (qc1N = CN qt/pa). In sand, u2 is near the equilibrium pore pressure, so qt and
+    qc are close; qt is what `triggering_bi2014` has, and it is kept so existing
+    results do not change. Pass qc as `qt` to evaluate the published form.
+
     Returns:
         (qc1ncs, cn)
     """
@@ -50,7 +56,7 @@ def qc1ncs_bi2014(qt, sigma_v_eff, fc, max_iter: int = 50):
     for _ in range(max_iter):
         m = np.clip(1.338 - 0.249 * np.clip(qc1ncs, 21, 254) ** 0.264, 0.264, 0.782)
         cn = np.minimum((PA / sigma_v_eff) ** m, 1.7)
-        qc1n = cn * qt / PA
+        qc1n = cn * qt / PA  # qt, not the measured qc; see the docstring.
         dq = (11.9 + qc1n / 14.6) * np.exp(1.63 - 9.7 / (fc + 2) - (15.7 / (fc + 2)) ** 2)
         new = qc1n + dq
         if np.allclose(new, qc1ncs, atol=1e-3, equal_nan=True):
@@ -176,6 +182,9 @@ def triggering_bi2014(
     amax: float,
     *,
     unit_weight=None,
+    u0=None,
+    gamma_min: float | None = 14.0,
+    gamma_max: float | None = 22.0,
     cfc: float = 0.0,
     ic_cutoff: float = 2.6,
     max_depth: float = 20.0,
@@ -184,14 +193,23 @@ def triggering_bi2014(
 ) -> TriggeringResult:
     """Deterministic liquefaction triggering by Boulanger & Idriss (2014).
 
+    Normalized parameters (Q, Qtn, n, Fr, Bq, U, qnet, qE) are not repeated here;
+    `opencpt.site.site_profile` returns them for the same inputs.
+
     Args:
         depth: Depth below ground surface (m), increasing.
         qt: Corrected cone resistance (kPa); see `opencpt.site.corrected_cone_resistance`.
         fs: Sleeve friction (kPa).
-        gwt: Groundwater depth (m).
+        gwt: Groundwater depth (m). Readings at or above it are not assessed, unless `u0`
+            is supplied, in which case readings with u0 ≤ 0 are not assessed.
         mw: Earthquake moment magnitude.
         amax: Peak ground acceleration (g).
         unit_weight: One constant unit weight (kN/m³), or None for Robertson & Cabal (2010).
+        u0: Pore pressure (kPa), one value per depth (aligned with `depth`, before the
+            `max_depth` cut) or a scalar. None keeps the hydrostatic profile from `gwt`.
+        gamma_min: Lower limit (kN/m³) on the Robertson & Cabal unit weight. Default 14.
+            None leaves it open. Ignored when `unit_weight` is given.
+        gamma_max: Upper limit (kN/m³). Default 22. None leaves it open.
         cfc: Fitting parameter C_FC of the fines content correlation.
         ic_cutoff: Readings with Ic at or above this are treated as not liquefiable.
         max_depth: Readings deeper than this are left out (m); at most 34 m, the limit of rd.
@@ -202,7 +220,16 @@ def triggering_bi2014(
         raise ValueError(f"max_depth can be at most {RD_MAX_DEPTH:g} m, the depth to which rd is defined.")
     depth = np.asarray(depth, dtype=float)
     keep = depth <= max_depth
-    site = site_profile(depth[keep], np.asarray(qt, dtype=float)[keep], np.asarray(fs, dtype=float)[keep], gwt, unit_weight)
+    if u0 is not None:
+        u0 = np.asarray(u0, dtype=float)
+        if u0.ndim != 0:
+            if u0.shape != depth.shape:
+                raise ValueError(f"u0 must be one value per depth; got shape {u0.shape}, expected {depth.shape}.")
+            u0 = u0[keep]
+    site = site_profile(
+        depth[keep], np.asarray(qt, dtype=float)[keep], np.asarray(fs, dtype=float)[keep], gwt, unit_weight,
+        u0=u0, gamma_min=gamma_min, gamma_max=gamma_max,
+    )
     z, qt, gamma, invalid = site.depth, site.qt, site.unit_weight, site.invalid
     sigma_v, sigma_v_eff, ic = site.sigma_v, site.sigma_v_eff, site.ic
     fc = fines_content_bi2014(ic, cfc)
@@ -211,7 +238,10 @@ def triggering_bi2014(
     csr = cyclic_stress_ratio(amax, sigma_v, sigma_v_eff, stress_reduction_coefficient(z, mw))
     crr = crr_m75_bi2014(q1, c0) * magnitude_scaling_factor_bi2014(mw, q1) * overburden_correction_bi2014(sigma_v_eff, q1)
     fsl = crr / csr
-    fsl[(ic >= ic_cutoff) | (z <= gwt) | invalid] = np.nan
+    # Default keeps the z <= gwt mask. A supplied profile uses u0 <= 0, which is the
+    # same mask when that profile is the hydrostatic one from gwt.
+    unsaturated = (z <= gwt) if u0 is None else (site.u0 <= 0)
+    fsl[(ic >= ic_cutoff) | unsaturated | invalid] = np.nan
 
     return TriggeringResult(
         depth=z, qt=qt, unit_weight=gamma, sigma_v=sigma_v, sigma_v_eff=sigma_v_eff, ic=ic, fc=fc,

@@ -42,13 +42,24 @@ depth in m, cone readings and stresses in kPa, unit weight in kN/m³, Vs in m/s,
 
 | Module | What | Source |
 |---|---|---|
-| `opencpt.site` | qt from u2, unit weight, stresses, Ic with the stress exponent iterated | Boulanger & Idriss (2014) Eq. 2.3; Robertson & Cabal (2010); Robertson (2009) |
+| `opencpt.site` | qt from u2, unit weight, stresses, Ic with the stress exponent iterated, and Q, Qtn, n, Fr, Bq, U, qnet, qE, u0 | Boulanger & Idriss (2014) Eq. 2.3; Robertson & Cabal (2010); Robertson (2009) |
 | `opencpt.liquefaction` | Deterministic triggering: FC from Ic, qc1Ncs, rd, CSR, MSF, Kσ, CRR (C0 = 2.80), FSL and critical layers | Boulanger & Idriss (2014), Report UCD/CGM-14/01, Eqs. 2.2–2.30; rd from Idriss & Boulanger (2008) |
 | `opencpt.shear_wave` | Vs from the A07 and MG15_qc regressions for Metro Vancouver post-glacial sediments; time-averaged Vs (Vs30) | Assaf, Molnar & El Naggar (2023), *Soil Dyn Earthq Eng* 165:107693; coefficients from Assaf (2022), Table B-1 |
 
 Choices worth knowing:
 
 - u2 is used as measured, so a negative reading reduces qt (Eq. 2.3).
+- Pore pressure is hydrostatic from the groundwater depth unless a `u0` profile is passed
+  (one value per reading). That profile is the equilibrium pore pressure used for effective
+  stress, Bq and U.
+- `site_profile` returns the normalized parameters beside `ic`: `qt1` (Q, also Qt1), `qtn`, `n`,
+  `fr`, `qnet` and `u0`. Pass `u2` to fill `bq`, `u` (U) and `qe` (qE = qt - u2); otherwise those
+  three are NaN. Bq = (u2 - u0)/(qt - sigma_v) and U = (u2 - u0)/sigma'_v. Qtn is floored at 1,
+  the friction ratio used in Ic is floored at 0.01%, and n is capped at 1.
+- Robertson & Cabal unit weight is limited to 14–22 kN/m³ by default. `gamma_min` and
+  `gamma_max` change the limits (`None` leaves a side open). A unit weight you pass in is used as given.
+- qc1N in Boulanger & Idriss triggering is CN·qt/pa. The 2014 procedure writes CN·qc/pa;
+  qt is used here, and is close to qc in sand.
 - Readings with qt or fs missing, qt ≤ 0 or fs < 0 are flagged `invalid` and get no FSL.
   Their unit weight is interpolated so the stresses below stay defined.
 - `triggering_bi2014` assesses readings down to `max_depth` (20 m by default) and leaves deeper
