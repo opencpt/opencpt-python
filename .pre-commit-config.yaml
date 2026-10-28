@@ -1,0 +1,7 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    # Ruff version. Keep in step with the ruff pin resolved in uv.lock.
+    rev: v0.17.3
+    hooks:
+      - id: ruff-check
+      - id: ruff-format

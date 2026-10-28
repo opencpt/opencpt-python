@@ -22,7 +22,14 @@ classifiers = [
 dependencies = ["numpy>=1.23"]
 
 [dependency-groups]
-dev = ["pytest>=8", "pandas>=2", "openpyxl>=3"]
+dev = [
+  "pytest>=8",
+  "pandas>=2",
+  "openpyxl>=3",
+  "ruff>=0.17",
+  "pyright>=1.1",
+  "pre-commit>=4",
+]
 
 [project.urls]
 Homepage = "https://github.com/opencpt/opencpt-python"
@@ -36,3 +43,25 @@ packages = ["src/opencpt"]
 
 [tool.hatch.build.targets.sdist]
 include = ["src/opencpt", "README.md", "LICENSE", "CHANGELOG.md"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+  "E",   # pycodestyle errors
+  "W",   # pycodestyle warnings
+  "F",   # pyflakes
+  "I",   # isort
+  "B",   # flake8-bugbear
+  "UP",  # pyupgrade
+  "NPY", # numpy
+]
+
+[tool.pyright]
+typeCheckingMode = "basic"
+include = ["src"]
+exclude = ["tests"]
+pythonVersion = "3.9"

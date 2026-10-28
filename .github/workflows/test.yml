@@ -16,3 +16,12 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
       - run: uv run --python ${{ matrix.python }} pytest -q
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv run --python 3.12 ruff format --check
+      - run: uv run --python 3.12 ruff check
+      - run: uv run --python 3.12 pyright
