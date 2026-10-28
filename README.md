@@ -1,7 +1,8 @@
 # opencpt
 
 Open-source Python library for CPT (cone penetration test) analysis: site characterization,
-liquefaction triggering by Boulanger & Idriss (2014) and shear wave velocity from CPT.
+liquefaction triggering by Boulanger & Idriss (2014) and by Robertson & Wride (1998) /
+Robertson (2009), and shear wave velocity from CPT.
 It is the engine of the [OpenCPT](https://github.com/opencpt) app.
 
 **Alpha.** The API may change between 0.x releases.
@@ -44,6 +45,7 @@ depth in m, cone readings and stresses in kPa, unit weight in kN/m³, Vs in m/s,
 |---|---|---|
 | `opencpt.site` | qt from u2, unit weight, stresses, Ic with the stress exponent iterated, and Q, Qtn, n, Fr, Bq, U, qnet, qE, u0 | Boulanger & Idriss (2014) Eq. 2.3; Robertson & Cabal (2010); Robertson (2009) |
 | `opencpt.liquefaction` | Deterministic triggering: FC from Ic, qc1Ncs, rd, CSR, MSF, Kσ, CRR (C0 = 2.80), FSL and critical layers | Boulanger & Idriss (2014), Report UCD/CGM-14/01, Eqs. 2.2–2.30; rd from Idriss & Boulanger (2008) |
+| `opencpt.liquefaction` | Robertson & Wride triggering on Robertson (2009) Qtn: Kc, Qtn,cs, CRR7.5, NCEER rd, Youd et al. MSF, FS | Robertson & Wride (1998); Robertson (2009); Youd et al. (2001); rd from Liao & Whitman (1986) / NCEER |
 | `opencpt.shear_wave` | Vs from the A07 and MG15_qc regressions for Metro Vancouver post-glacial sediments; time-averaged Vs (Vs30) | Assaf, Molnar & El Naggar (2023), *Soil Dyn Earthq Eng* 165:107693; coefficients from Assaf (2022), Table B-1 |
 
 Choices worth knowing:
@@ -66,6 +68,14 @@ Choices worth knowing:
   ones out. `max_depth` can be at most 34 m, the depth to which rd is defined; a larger value
   raises `ValueError`, as does `stress_reduction_coefficient` for any depth deeper than 34 m. Below 20 m,
   Idriss & Boulanger (2008) recommend CSR from a site response analysis instead.
+- `triggering_robertson2009` evaluates the Robertson & Wride (1998) qc1N curve, as
+  adopted by Youd et al. (2001), on Robertson (2009) Qtn and Ic. Kc is 1 for
+  Ic ≤ 1.64, the Robertson & Wride polynomial above that, and 1 again for
+  1.64 < Ic < 2.36 and Fr < 0.5%. Ic greater than 2.6 is not given a factor of safety.
+  Qtn,cs ≥ 160 is classed as not liquefiable. CSR uses the NCEER rd. The factor of
+  safety stops at `max_depth` (23 m by default); raise it to use the rd extension.
+  The magnitude scaling factor defaults to 10^2.24/Mw^2.56 (Youd et al. 2001). Kσ is 1
+  unless `k_sigma_f` is set, and that factor is capped at 1.
 - A critical layer's thickness is measured from its first to its last reading with FSL ≤ 1.
   Runs are merged across gaps of up to 0.1 m and kept from 0.4 m thick.
 - The Vs regressions were fitted to 1 m averages of CPT readings; they are applied here per reading.
